@@ -1,0 +1,48 @@
+version: "3.2"
+services:
+  rabbitmq:
+    image: rabbitmq:3.8-management-alpine
+    container_name: 'rabbitmq'
+    ports:
+        - 5673:5672
+        - 15673:15672
+    volumes:
+        - ~/.docker-conf/rabbitmq/data/:/var/lib/rabbitmq/
+        - ~/.docker-conf/rabbitmq/log/:/var/log/rabbitmq
+    networks:
+        - rabbitmq_nodejs
+  consumer:
+    build:
+      context: ./consumer
+      target: dev
+    volumes:
+      - ./consumer:/src
+      - ./common:/src/common
+    depends_on:
+      - "rabbitmq"
+    command: sh -c '/bin/wait-for-it.sh rabbitmq:5672 --timeout=30 -- node ./src/consumer.js'
+    container_name: 'consumer'
+    environment:
+      NODE_ENV: production
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - rabbitmq_nodejs
+  publisher:
+    build:
+      context: ./publisher
+      target: dev
+    volumes:
+      - ./publisher:/src
+      - ./common:/src/common
+    depends_on:
+      - "rabbitmq"
+    command: sh -c "/bin/wait-for-it.sh rabbitmq:5672 --timeout=30 -- /bin/bash -c 'for ((i=1;i<=50;i++)); do node ./src/publisher.js; done'"
+    container_name: 'publisher'
+    environment:
+      NODE_ENV: production
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - rabbitmq_nodejs  
+networks:
+  rabbitmq_nodejs:
+    driver: bridge
